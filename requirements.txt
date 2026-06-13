@@ -1,0 +1,25 @@
+# Web framework
+streamlit==1.37.1
+fastapi==0.112.2
+uvicorn==0.30.6
+pydantic==2.8.2
+
+# HTTP
+requests==2.32.3
+
+# Data
+pandas==2.2.2
+
+# Database
+psycopg2-binary==2.9.12
+sqlalchemy==2.0.50
+alembic==1.18.4
+
+# Solana
+solana>=0.35.0
+solders>=0.21.0
+spl-token>=0.4.0
+base58>=2.1.1
+
+# Utilities
+python-dotenv>=1.0.0

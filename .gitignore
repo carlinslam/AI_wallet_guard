@@ -1,0 +1,23 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Solana & Secrets (絕對不能上傳！)
+.solana_treasury_keypair
+*.pem
+*.key
+
+# Database
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+
+# OS
+.DS_Store
