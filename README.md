@@ -1,108 +1,82 @@
 # AI Wallet Guard MVP v6
 
-v6 升級為真正可部署的服務基礎設施：
+v6 upgrades the project into a truly deployable, enterprise-grade service infrastructure:
 
-| 功能 | v5 | v6 |
+| Feature | v5 | v6 |
 |---|---|---|
-| 資料庫 | SQLite 本地檔案 | **PostgreSQL + SQLAlchemy 連線池 + Alembic migrations** |
-| API 安全 | 無認證，任何人可呼叫 | **API 金鑰認證（Bearer token / X-API-Key，sha256 雜湊儲存，scope 管制）** |
-| 支付清算 | 純模擬，無鏈上紀錄 | **Solana devnet USDC — 真實 SPL Token 交易指令 + Ed25519 簽名，模擬/上鍊皆可** |
-| Schema 管理 | 手動建表 | Alembic migrations（`alembic upgrade head`） |
-| 金鑰管理 | — | issue / rotate / revoke + scope 強制（read / write / admin） |
-| Fallback | — | Postgres 不可達時自動降為 SQLite（zero-config CI/local dev） |
+| **Database** | Local SQLite file | **PostgreSQL + SQLAlchemy Connection Pool + Alembic Migrations** |
+| **API Security** | Unauthenticated, open to all | **API Key Authentication (Bearer token / X-API-Key, SHA-256 hash storage, Scope enforcement)** |
+| **Payment Settlement** | Pure simulation, no on-chain records | **Solana Devnet USDC — Real SPL Token transaction instructions + Ed25519 signatures. Supports both local simulation and live on-chain broadcasting.** |
+| **Schema Management** | Manual table creation | Alembic migrations (`alembic upgrade head`) |
+| **Key Management** | — | Issue / rotate / revoke + enforced scopes (`read` / `write` / `admin`) |
+| **Fallback System** | — | Graceful fallback to SQLite if Postgres is unreachable (zero-config for CI/local dev) |
 
-所有 v5 功能（DeID 身分、自學習稅務分類、SDK、串流支付、信用分、Review Queue、Yield Vault）完整保留。
-
----
-
-## 新檔案
-
-```text
-db.py                  SQLAlchemy engine + 連線池 + SQLite fallback + param 正規化
-auth.py                API key 簽發、驗證、輪換、scope 管制、bootstrap_root_key()
-solana_rail.py         Solana devnet USDC 清算：SPL Token transfer_checked + Ed25519 簽名
-migrations/
-  env.py               Alembic 環境
-  versions/
-    0001_initial_schema_v6.py  完整 schema + indexes（含 api_keys, solana_payments）
-alembic.ini            Alembic 設定
-```
+All v5 features (**DeID Identity, Self-learning Tax Classifier, Agent SDK, Streaming Payments, Machine Credit Scores, Review Queue, Yield Vault**) are fully preserved.
 
 ---
 
-## 安裝
+## New Architecture Files
+
+- `db.py`: SQLAlchemy engine + connection pool + SQLite fallback + param normalization.
+- `auth.py`: API key issuance, verification, rotation, scope control, `bootstrap_root_key()`.
+- `solana_rail.py`: Solana devnet USDC settlement: SPL Token `transfer_checked` + Ed25519 signatures.
+- `migrations/env.py`: Alembic environment config.
+- `migrations/versions/0001_initial_schema_v6.py`: Complete schema + indexes (including `api_keys`, `solana_payments`).
+- `alembic.ini`: Alembic configurations.
+
+---
+
+## Installation
 
 ```bash
 pip install -r requirements.txt
-```
 
-## 設定
-
-建立 `.env`（或設環境變數）：
-
-```bash
-# 資料庫（必填，或設 DATABASE_BACKEND=sqlite 用 SQLite）
+# Database (Required. Or set DATABASE_BACKEND=sqlite to use local SQLite)
 DATABASE_URL=postgresql+psycopg2://awg_user:awg_pass@localhost:5432/ai_wallet_guard_v6
 
-# Solana（選填）
-SOLANA_SIMULATE=true          # true = 本地簽名模擬；false = 真實 devnet 交易
-SOLANA_RPC_URL=https://api.devnet.solana.com
+# Solana (Optional)
+SOLANA_SIMULATE=true          # true = local signature simulation; false = live devnet broadcasting
+SOLANA_RPC_URL=[https://api.devnet.solana.com](https://api.devnet.solana.com)
 
-# Slack（選填）
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/…   # critical alert 自動推播
-```
+# Slack (Optional)
+SLACK_WEBHOOK_URL=[https://hooks.slack.com/services/](https://hooks.slack.com/services/)…   # Auto-push for critical alerts
 
-## 初始化資料庫
 
-```bash
-# 建立 Postgres 使用者 + 資料庫（一次性）
+# Create Postgres user + database (One-time setup)
 createuser -P awg_user
 createdb -O awg_user ai_wallet_guard_v6
 
-# 跑 migration
+# Run migrations
 alembic upgrade head
-```
-
 ---
 
-## 啟動
+## Quick Start
 
-```bash
-# Terminal 1 — Guard API（啟動時自動印出 root API key）
+# Terminal 1 — Guard API (Auto-prints the root API key on first startup)
 python -m uvicorn guard_api:app --reload --port 8000
 
-# Terminal 2 — Dashboard
+# Terminal 2 — Streamlit Dashboard
 streamlit run app.py
 
-# Terminal 3 — AI Agent Simulator
+# Terminal 3 — AI Agent Simulator (Runs the full 14-act demo story)
 python agent_simulator.py mixed
-```
-
 ---
 
-## API 認證
-
-所有 mutation 端點都需要帶金鑰：
-
-```bash
-# Bearer token
+## API Authentication
+# Using Bearer token
 curl -H "Authorization: Bearer awg_xxx.yyy" http://localhost:8000/authorize-payment ...
 
-# 或 X-API-Key header
+# Or using X-API-Key header
 curl -H "X-API-Key: awg_xxx.yyy" ...
-```
 
 Root key 在 API 第一次啟動時自動產生並印到 stdout，同時寫入 `.env`。
 
-### 金鑰管理端點
+### Key Management Endpoints
 
-```bash
-POST   /auth/keys                    # 簽發新金鑰（admin scope）
-GET    /auth/keys                    # 列出所有金鑰（admin）
-POST   /auth/keys/{key_id}/rotate    # 輪換 → 廢棄舊金鑰，回傳新 token（admin）
-DELETE /auth/keys/{key_id}           # 撤銷金鑰（admin）
-```
-
+POST   /auth/keys                    # Issue a new key (requires 'admin' scope)
+GET    /auth/keys                    # List all active keys (requires 'admin' scope)
+POST   /auth/keys/{key_id}/rotate    # Rotate → revokes old key, returns new token (admin)
+DELETE /auth/keys/{key_id}           # Revoke key permanently (admin)
 ### Scopes
 
 | Scope | 可用操作 |
